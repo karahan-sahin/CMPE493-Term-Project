@@ -1,0 +1,5 @@
+Autocorrect?
+
+**Term expansion** refers to the process of augmenting a single query **term** with one or more alternative terms, in order to increase retrieval results.
+
+Use Feedback Round 5 since the challenge is over?
