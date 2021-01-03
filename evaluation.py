@@ -27,8 +27,10 @@ def load_continue_preprocessing(loadCorpora=True, loadDict=True):
     else:
         fin_corpora = open("corpora.json", "r", encoding="utf-8")
         _corpora = json.load(fin_corpora)
+        fin_corpora.close()
         fin_dictionary = open("dictionary.json", "r", encoding="utf-8")
         _dictionary = json.load(fin_dictionary)
+        fin_dictionary.close()
     print("Loading sequence completed.")
 
     _corpora = tf_idf_calculator(_corpora, _dictionary)
