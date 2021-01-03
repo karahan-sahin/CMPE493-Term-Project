@@ -1,7 +1,6 @@
 import csv
 import json
 import math
-import pandas as pd
 
 import match
 import string
@@ -9,13 +8,6 @@ import nltk
 from nltk.corpus import stopwords
 
 from collections import defaultdict
-
-
-# For all docs  -->  docID: count_dict
-
-# For all word --->  word: collection frequency
-
-# Remove punctuations
 
 # Tokenizer and Stemmer function
 def tokenize(text):
@@ -67,82 +59,51 @@ def metadata_extractor():
     return corpora, dictionary
 
 def dict_dump(dictionary):
-    with open("dictionary.json","w",encoding="utf-8") as f:
+    with open(f"{str(dictionary)}.json","w",encoding="utf-8") as f:
         json.dump(dictionary,f, indent= 2, ensure_ascii = False)
 
-def tf_idf_calculator(corpora, dictionary):
-    # arrays for 
-    TF_IDF_vectors = []
-
-    for counts in corpora.values():
-
-        # Create count vector from count_dicts
-        count_vector = []
-
-        # Iterate over dictionary for each word
-        for word, freq in dictionary.items():
+def tf_idf_calculator(corpora, dictionary): 
+    for count_dicts in corpora.values():
+        for word, freq in count_dicts.items():
 
             # Fetch tf and idf
-            term_frequency = counts[word]
-            if term_frequency == 0:
-                count_vector.append(0)
-                continue
+            term_frequency = freq
+            inverted_doc_freq = math.log10(len(corpora.keys())/dictionary[word])
+            count_dicts[word] = term_frequency * inverted_doc_freq
 
-            inverted_doc_freq = math.log10(len(corpora.keys())/freq)
-
-            0# If the term doesn't exist
-            # then tf = 
-            count_vector.append(term_frequency * inverted_doc_freq)
-
-        # Append vectors for the 2D array
-        TF_IDF_vectors.append(count_vector)
-
-    return TF_IDF_vectors
-
-def tf_idf_matrix_calculator(TF_IDF_vectors, corpora, dictionary): 
-    tf_idf_matrix = pd.DataFrame(TF_IDF_vectors, index=list(corpora.keys()), columns=dictionary.keys())
-
-    # pickled tf_idf matrix just in case
-    tf_idf_pickle = tf_idf_matrix.to_pickle("./tf_idf.pickle")
-
-    return tf_idf_matrix
+    return corpora
 
 def query_analyzer(dictionary, isEven):
     # A dictionary for query vectors
     # topicID: query_vector  
-    query_vectors = defaultdict(list)
+    query_dicts = defaultdict(dict)
 
     for topic in match.topic_extractor(isEven=isEven):
-
-        query_vector = []
 
         # tokenize query 
         tokens = tokenize(topic["query"])
 
         # create a count_dict
-        counts = defaultdict(int)
+        count_dicts = defaultdict(int)
         for token in tokens:
-            counts[token] += 1
+            count_dicts[token] += 1
 
         # Create a query vector with tfidf weighting
-        for word, freq in dictionary.items():
+        for word, freq in count_dicts.items():
 
-            term_frequency = counts[word]
-            if term_frequency == 0:
-                query_vector.append(0)
-                continue
+            term_frequency = freq
+            inverted_doc_freq = math.log10(len(dictionary.keys())/dictionary[word])
 
-            inverted_doc_freq = math.log10(len(dictionary.keys())/freq)
-            query_vector.append(term_frequency * inverted_doc_freq)
-        query_vectors[topic["topic_id"]] = query_vector
+            count_dicts[word] = term_frequency * inverted_doc_freq
+        query_dicts[topic["topic_id"]] = count_dicts
 
-    return query_vectors
+    return query_dicts
 
-def relevance_analyzer(query_vectors, corpora, tf_idf_matrix):
+def relevance_analyzer(query_dicts, corpora):
     result_data = defaultdict(dict)
     # For each odd numbered topic 
     # topic: odd topic ID
-    for topic, q_vec in query_vectors.items():
+    for topic, q_dict in query_dicts.items():
 
         # Scores dict to be sorted 
         # docID: score
@@ -150,26 +111,30 @@ def relevance_analyzer(query_vectors, corpora, tf_idf_matrix):
 
         # Normalizing QUERY to a binary vector
         total = 0
-        for word in q_vec:
+        for word in q_dict.values():
             total += word**2
 
         qvec_norm = total**0.5
 
         for docID in list(corpora.keys()):
             
-            doc_vec = tf_idf_matrix.loc[docID]
+            doc_dict = corpora[docID]
 
             # Normalizing DOCUMENT to a binary vector
             total = 0
-            for word in doc_vec:
+            for word in doc_dict.keys():
                 total += word**2
 
             dvec_norm = total**0.5
             
             # Multiply vectors
             sums = 0
-            for q, d in zip(q_vec, doc_vec):
-                sums += q * d
+            q_dict_keys = set(q_dict.keys())
+            doc_dict_keys = set(doc_dict.keys())
+            intersected_keys = q_dict_keys.intersection(doc_dict_keys)
+
+            for intersect_key in list(intersected_keys):
+                sums += q_dict[intersect_key] * doc_dict[intersect_key]
 
             score = sums / (qvec_norm * dvec_norm) # qvec_norm: query vector l2 norm, dvec_norm: document vector l2 norm
 
@@ -179,4 +144,10 @@ def relevance_analyzer(query_vectors, corpora, tf_idf_matrix):
         sorted_by_scores = dict(sorted(scores.items(), key=lambda item: item[1],reverse=True))
         result_data[topic] = sorted_by_scores
 
+        fout = open(f"{topic}.json", "w", encoding="utf-8")
+        json.dump(sorted_by_scores, fout)
+        fout.flush()
+        fout.close()
+
     return result_data
+
