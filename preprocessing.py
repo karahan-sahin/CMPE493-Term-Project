@@ -58,9 +58,11 @@ def metadata_extractor():
 
     return corpora, dictionary
 
-def dict_dump(dictionary):
-    with open(f"{str(dictionary)}.json","w",encoding="utf-8") as f:
-        json.dump(dictionary,f, indent= 2, ensure_ascii = False)
+def dict_dump(dictionary, name):
+    fout = open(f"{name}.json","w",encoding="utf-8")
+    json.dump(dictionary, fout)
+    fout.flush()
+    fout.close()
 
 def tf_idf_calculator(corpora, dictionary): 
     for count_dicts in corpora.values():
@@ -111,8 +113,8 @@ def relevance_analyzer(query_dicts, corpora):
 
         # Normalizing QUERY to a binary vector
         total = 0
-        for word in q_dict.values():
-            total += word**2
+        for wval in q_dict.values():
+            total += wval**2
 
         qvec_norm = total**0.5
 
@@ -122,8 +124,8 @@ def relevance_analyzer(query_dicts, corpora):
 
             # Normalizing DOCUMENT to a binary vector
             total = 0
-            for word in doc_dict.keys():
-                total += word**2
+            for wval in doc_dict.values():
+                total += wval**2
 
             dvec_norm = total**0.5
             
@@ -144,7 +146,7 @@ def relevance_analyzer(query_dicts, corpora):
         sorted_by_scores = dict(sorted(scores.items(), key=lambda item: item[1],reverse=True))
         result_data[topic] = sorted_by_scores
 
-        fout = open(f"{topic}.json", "w", encoding="utf-8")
+        fout = open(f"tra/{topic}.json", "w", encoding="utf-8")
         json.dump(sorted_by_scores, fout)
         fout.flush()
         fout.close()
