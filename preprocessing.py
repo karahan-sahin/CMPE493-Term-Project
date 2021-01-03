@@ -64,14 +64,6 @@ def metadata_extractor():
             # Add to corpora
             corpora[cord_uid] = counts
 
-            # Remove repeated docs
-            # Maybe outdated docs can be eliminated using upload_date from metacsv? 
-            if corpora[cord_uid]:
-                if len(corpora[cord_uid]) > len(counts):
-                    continue
-            else:
-                corpora[cord_uid] = counts
-
     return corpora, dictionary
 
 def dict_dump(dictionary):

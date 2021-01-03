@@ -1,1 +1,3 @@
 venv/
+metadata.csv
+__pycache__/
