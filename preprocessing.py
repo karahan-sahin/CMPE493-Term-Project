@@ -101,6 +101,14 @@ def query_analyzer(dictionary, isEven):
 
     return query_dicts
 
+def write_to_file(topic_id, sorted_relevance_dict):
+    fout = open(f"tra/results.txt", "a", encoding="utf-8")
+    for ix, (doc_id, relevance) in enumerate(sorted_relevance_dict.items()):
+        if ix % 1000 == 0:
+            fout.flush()
+        fout.write(f"{topic_id}\tQ0\t{doc_id}\t{(ix+1)}\t{relevance}\tSTANDARD\n")
+    fout.close()
+
 def relevance_analyzer(query_dicts, corpora):
     result_data = defaultdict(dict)
     # For each odd numbered topic 
@@ -146,10 +154,7 @@ def relevance_analyzer(query_dicts, corpora):
         sorted_by_scores = dict(sorted(scores.items(), key=lambda item: item[1],reverse=True))
         result_data[topic] = sorted_by_scores
 
-        fout = open(f"tra/{topic}.json", "w", encoding="utf-8")
-        json.dump(sorted_by_scores, fout)
-        fout.flush()
-        fout.close()
+        write_to_file(topic, sorted_by_scores)
 
     return result_data
 
