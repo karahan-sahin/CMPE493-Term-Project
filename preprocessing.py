@@ -23,6 +23,7 @@ def metadata_extractor():
     dictionary = defaultdict(int)
     # open the file and extract data
     relevancy_keys = set(match.topic_relevancy_extractor().keys())
+    sum_dl = 0
     with open('metadata.csv', encoding = "utf8", errors ='replace') as f_in:
         reader = csv.DictReader(f_in)
         for row in reader:
@@ -52,11 +53,16 @@ def metadata_extractor():
             # This is for count vector
             for word in tokens:
                 counts[word] += 1
+            
+            doc_length = len(tokens)
+            sum_dl += doc_length
 
             # Add to corpora
             corpora[cord_uid] = counts
+    
+    avdl = sum_dl / len(corpora)
 
-    return corpora, dictionary
+    return corpora, dictionary, avdl
 
 def dict_dump(dictionary, name):
     fout = open(f"{name}.json","w",encoding="utf-8")
@@ -65,20 +71,50 @@ def dict_dump(dictionary, name):
     fout.close()
 
 def tf_idf_calculator(corpora, dictionary): 
-    for count_dicts in corpora.values():
+
+    tf_idf_dictionary = defaultdict(dict())
+
+    for docID, count_dicts in corpora.items():
+        tdf_idf_vec = defaultdict(int)
         for word, freq in count_dicts.items():
 
             # Fetch tf and idf
             term_frequency = freq
             inverted_doc_freq = math.log10(len(corpora.keys())/dictionary[word])
-            count_dicts[word] = term_frequency * inverted_doc_freq
+            tdf_idf_vec[word] = term_frequency * inverted_doc_freq
+        
+        tf_idf_dictionary[docID] = tdf_idf_vec
 
-    return corpora
+    return tf_idf_dictionary
 
-def query_analyzer(dictionary, isEven):
+def bm25_calculator(corpora, dictionary, avdl): 
+    
+    bm_25_dictionary= defaultdict(dict())
+
+    k1 = (1.2 or 2)
+    b = 0.75
+
+    for docID, count_dicts in corpora.items():
+        bm_25_vec = defaultdict(int)
+        doc_length = sum(count_dicts.values())
+        for word, freq in count_dicts.items():
+            # Fetch tf and idf
+            term_frequency = freq
+            inverted_doc_freq = math.log10(len(corpora.keys())/dictionary[word])
+            
+            bm25_score = inverted_doc_freq * (((k1+1)*term_frequency) / (k1*( (1-b) + b*(doc_length/avdl)) + term_frequency) )
+
+            bm_25_vec[word] = bm25_score
+
+        bm_25_dictionary[docID] = bm_25_vec
+
+    return bm_25_dictionary
+
+def query_analyzer(dictionary, N, isEven, avdl):
     # A dictionary for query vectors
     # topicID: query_vector  
-    query_dicts = defaultdict(dict)
+    query_tf_idf_dicts = defaultdict(dict)
+    query_bm25_dicts = defaultdict(dict)
 
     for topic in match.topic_extractor(isEven=isEven):
 
@@ -86,30 +122,44 @@ def query_analyzer(dictionary, isEven):
         tokens = tokenize(topic["query"])
 
         # create a count_dict
-        count_dicts = defaultdict(int)
+        count_dict = defaultdict(int)
         for token in tokens:
-            count_dicts[token] += 1
+            count_dict[token] += 1
+
+        k1 = (1.2 or 2)
+        b = 0.75
+        query_length = len(tokens)
+
+        tf_idf_vec = defaultdict(int)
+        bm25_vec = defaultdict(float)
 
         # Create a query vector with tfidf weighting
-        for word, freq in count_dicts.items():
-
+        for word, freq in count_dict.items():
+            
             term_frequency = freq
-            inverted_doc_freq = math.log10(len(dictionary.keys())/dictionary[word])
+            inverted_doc_freq = math.log10(N/dictionary[word])
+            
+            bm25_score = inverted_doc_freq * (((k1+1)*term_frequency) / (k1*( (1-b) + b*(query_length/avdl)) + term_frequency) )
+            
+            bm25_vec[word] = bm25_score
+            tf_idf_vec[word] = term_frequency * inverted_doc_freq
 
-            count_dicts[word] = term_frequency * inverted_doc_freq
-        query_dicts[topic["topic_id"]] = count_dicts
 
-    return query_dicts
+        query_tf_idf_dicts[topic["topic_id"]] = tf_idf_vec
+        query_bm25_dicts[topic["topic_id"]] = bm25_vec
 
-def write_to_file(topic_id, sorted_relevance_dict):
-    fout = open(f"tra/results.txt", "a", encoding="utf-8")
+
+    return query_tf_idf_dicts, query_bm25_dicts
+
+def write_to_file(topic_id, sorted_relevance_dict, score_type):
+    fout = open(f"tra/{score_type}_results.txt", "a", encoding="utf-8")
     for ix, (doc_id, relevance) in enumerate(sorted_relevance_dict.items()):
         if ix % 1000 == 0:
             fout.flush()
         fout.write(f"{topic_id}\tQ0\t{doc_id}\t{(ix+1)}\t{relevance}\tSTANDARD\n")
     fout.close()
 
-def relevance_analyzer(query_dicts, corpora):
+def cos_sim_relevance_analyzer(query_dicts, weighted_dict, score_type):
     result_data = defaultdict(dict)
     # For each odd numbered topic 
     # topic: odd topic ID
@@ -117,7 +167,7 @@ def relevance_analyzer(query_dicts, corpora):
 
         # Scores dict to be sorted 
         # docID: score
-        scores = dict.fromkeys(list(corpora.keys()), 0)
+        scores = dict.fromkeys(list(weighted_dict.keys()), 0)
 
         # Normalizing QUERY to a binary vector
         total = 0
@@ -126,9 +176,9 @@ def relevance_analyzer(query_dicts, corpora):
 
         qvec_norm = total**0.5
 
-        for docID in list(corpora.keys()):
+        for docID in list(weighted_dict.keys()):
             
-            doc_dict = corpora[docID]
+            doc_dict = weighted_dict[docID]
 
             # Normalizing DOCUMENT to a binary vector
             total = 0
@@ -154,7 +204,47 @@ def relevance_analyzer(query_dicts, corpora):
         sorted_by_scores = dict(sorted(scores.items(), key=lambda item: item[1],reverse=True))
         result_data[topic] = sorted_by_scores
 
-        write_to_file(topic, sorted_by_scores)
+        write_to_file(topic, sorted_by_scores, score_type)
+
+    # {topic: {docID: SCORE}}
+    return result_data
+
+def reciprocal_ranking_fusion(tf_idf_all_scores, bm25_all_scores):    
+
+    result_data = defaultdict(dict())
+
+    for topic in tf_idf_all_scores.keys():
+        rrp_scores = defaultdict(float)
+        tf_idf_scores = tf_idf_all_scores[topic]
+        bm25_scores = bm25_all_scores[topic]
+        bm25_scores_keys = list(bm25_scores.keys())
+
+        # (rank ,docID)
+        # (rank ,docID)
+
+        # tf_idf_scores = enumerate(tf_idf_all_scores[topic].keys(), 1)
+        # bm25_scores = bm25_all_scores[topic].keys(), 1)
+
+        for ix, docID in enumerate(tf_idf_scores.keys()):
+
+            tf_idf_rank = ix
+            bm25_rank = bm25_scores_keys.index(docID)
+
+            rrp_scores[docID] = (1 / tf_idf_rank+1) + (1 / bm25_rank+1)
+
+        sorted_by_scores = dict(sorted(rrp_scores.items(), key=lambda item: item[1],reverse=True))
+        result_data[topic] = sorted_by_scores
+
+        write_to_file(topic, sorted_by_scores,"rrp")
 
     return result_data
+
+
+
+
+
+    
+
+
+
 
