@@ -6,14 +6,19 @@ import match
 import string
 import nltk
 from nltk.corpus import stopwords
+from nltk.corpus import wordnet as wn
 
 from collections import defaultdict
 
+trans_table = {ord(c): None for c in string.punctuation}
+
 # Tokenizer and Stemmer function
-def tokenize(text):
-    trans_table = {ord(c): None for c in string.punctuation}    
+def tokenize(text, puncRemoved=False):
     stemmer = nltk.PorterStemmer()
-    tokens = [word for word in nltk.word_tokenize(text.translate(trans_table)) if word not in set(stopwords.words('english'))] 
+    if puncRemoved:
+        tokens = [word for word in nltk.word_tokenize(text.translate(trans_table)) if word not in set(stopwords.words('english'))]
+    else:
+        tokens = [word for word in nltk.word_tokenize(text) if word not in set(stopwords.words('english'))] 
     stems = [stemmer.stem(item) for item in tokens]
 
     return stems
@@ -40,7 +45,7 @@ def metadata_extractor():
             content = title + " " + abstract
 
             # tokenize (with lowercase)
-            tokens = tokenize(content.lower())
+            tokens = tokenize(content.lower(), puncRemoved=True)
 
             # Find the unique set of words in document and
             # add for inverse doc freq 
@@ -119,7 +124,7 @@ def query_analyzer(dictionary, N, isEven, avdl):
     for topic in match.topic_extractor(isEven=isEven):
 
         # tokenize query 
-        tokens = tokenize(topic["query"])
+        tokens = tokenize(topic["query"], puncRemoved=False)
 
         # create a count_dict
         count_dict = defaultdict(int)
