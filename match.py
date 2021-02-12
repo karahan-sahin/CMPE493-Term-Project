@@ -5,14 +5,14 @@ def topic_extractor(isEven=False):
     # Topics in dictionary
     topics = ET.parse('topics-rnd5.xml')
     root = topics.getroot()
-    even_topics = [{'topic_id': int(topic.attrib['number']), 
-                    'query': topic[0].text, 
-                    'question': topic[1].text, 
+    even_topics = [{'topic_id': int(topic.attrib['number']),
+                    'query': topic[0].text,
+                    'question': topic[1].text,
                     'narrative': topic[2].text} for topic in root if int(topic.attrib['number']) % 2 == 0]
 
-    odd_topics = [{'topic_id': int(topic.attrib['number']), 
-                'query': topic[0].text, 
-                'question': topic[1].text, 
+    odd_topics = [{'topic_id': int(topic.attrib['number']),
+                'query': topic[0].text,
+                'question': topic[1].text,
                 'narrative': topic[2].text} for topic in root  if int(topic.attrib['number']) % 2 == 1]
 
     if isEven:
@@ -27,7 +27,6 @@ def topic_relevancy_extractor():
     with open("relevancy-judgements.txt", "r") as f:
         text = f.read()
         text = text.split('\n')
-        samp = ""
         for line in text:
             items = line.split()
 

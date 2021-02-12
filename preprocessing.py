@@ -1,27 +1,77 @@
 import csv
+import sys
 import json
 import math
 
 import match
 import string
 import nltk
-from nltk.corpus import stopwords
-from nltk.corpus import wordnet as wn
+import contractions
 
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet as wn
 from collections import defaultdict
+
+'''
+Planned works:
+1 - Add weight to abstract and title to recalibrate tf-idf values or bm25 values
+2 - Inject body data to the documents
+
+3 days:
+
+Task Pipeline:
+    Cagri - Karahan             Ozgurcan
+1 - Clustering                  Body Retriever
+2 - Clustering, cont'd
+3 - Question - Answer
+4 - Testing
+5 - Report
+6 -                             UI
+'''
 
 trans_table = {ord(c): None for c in string.punctuation}
 
-# Tokenizer and Stemmer function
-def tokenize(text, puncRemoved=False):
-    stemmer = nltk.PorterStemmer()
-    if puncRemoved:
-        tokens = [word for word in nltk.word_tokenize(text.translate(trans_table)) if word not in set(stopwords.words('english'))]
+'''
+Retrieved from: https://towardsdatascience.com/preprocessing-text-data-using-python-576206753c28
+'''
+def get_wordnet_pos(tag):
+    if tag.startswith('J'):
+        return wn.ADJ
+    elif tag.startswith('V'):
+        return wn.VERB
+    elif tag.startswith('N'):
+        return wn.NOUN
+    elif tag.startswith('R'):
+        return wn.ADV
     else:
-        tokens = [word for word in nltk.word_tokenize(text) if word not in set(stopwords.words('english'))] 
-    stems = [stemmer.stem(item) for item in tokens]
+        return wn.NOUN
 
-    return stems
+# Tokenizer and Lemmatizer
+def tokenize(text, pos_tag = False):
+    text_tokens = [contractions.fix(word) for word in text.split()]
+    text = ' '.join(text_tokens)
+
+    # Removes stopwords and punctuation from all tokens given in text
+    tokens = [word for word in word_tokenize(text.translate(trans_table)) if word not in set(stopwords.words('english'))]
+
+    # Expands contraction in all tokens
+    # e.g. "John's big" ->
+    # [('John', 'NNP'), ("'s", 'POS'), ('big', 'JJ')]
+    tokens = nltk.tag.pos_tag(tokens)
+
+    # Combines the token with its tag retrieved from wordnet
+    tokens = [(word, get_wordnet_pos(pos_tag)) for (word, pos_tag) in tokens]
+    wnl = WordNetLemmatizer() # Initializer lemmatizer
+
+    # If pos_tag enabled, tokens will be returned with their pos_tag values
+    if pos_tag:
+        tokens = [(wnl.lemmatize(word, tag), tag) for word, tag in tokens]
+    else:
+        tokens = [wnl.lemmatize(word, tag) for word, tag in tokens]
+
+    return tokens
 
 def metadata_extractor():
     corpora = defaultdict(dict)
@@ -32,7 +82,6 @@ def metadata_extractor():
     with open('metadata.csv', encoding = "utf8", errors ='replace') as f_in:
         reader = csv.DictReader(f_in)
         for row in reader:
-        
             # access metadata
             cord_uid = row['cord_uid']
             title = row['title']
@@ -41,24 +90,24 @@ def metadata_extractor():
             if cord_uid not in relevancy_keys:
                 continue
 
-            # concatinate content
+            # concatenate content
             content = title + " " + abstract
 
             # tokenize (with lowercase)
-            tokens = tokenize(content.lower(), puncRemoved=True)
+            tokens = tokenize(content.lower())
 
             # Find the unique set of words in document and
-            # add for inverse doc freq 
+            # add for inverse doc freq
             unique_tokens = set(tokens)
             for word in unique_tokens:
                 dictionary[word] += 1
 
-            # counts dictionary for the document--> word: freq
+            # counts dictionary for the document --> word: freq
             counts = defaultdict(int)
             # This is for count vector
             for word in tokens:
                 counts[word] += 1
-            
+
             doc_length = len(tokens)
             sum_dl += doc_length
 
@@ -75,10 +124,9 @@ def dict_dump(dictionary, name):
     fout.flush()
     fout.close()
 
-def tf_idf_calculator(corpora, dictionary): 
-
-    tf_idf_dictionary = defaultdict(dict())
-
+def tf_idf_calculator(corpora, dictionary):
+ 
+    tf_idf_dictionary = defaultdict(dict)
     for docID, count_dicts in corpora.items():
         tdf_idf_vec = defaultdict(int)
         for word, freq in count_dicts.items():
@@ -87,14 +135,14 @@ def tf_idf_calculator(corpora, dictionary):
             term_frequency = freq
             inverted_doc_freq = math.log10(len(corpora.keys())/dictionary[word])
             tdf_idf_vec[word] = term_frequency * inverted_doc_freq
-        
+
         tf_idf_dictionary[docID] = tdf_idf_vec
 
     return tf_idf_dictionary
 
-def bm25_calculator(corpora, dictionary, avdl): 
-    
-    bm_25_dictionary= defaultdict(dict())
+def bm25_calculator(corpora, dictionary, avdl):
+
+    bm_25_dictionary= defaultdict(dict)
 
     k1 = (1.2 or 2)
     b = 0.75
@@ -106,7 +154,7 @@ def bm25_calculator(corpora, dictionary, avdl):
             # Fetch tf and idf
             term_frequency = freq
             inverted_doc_freq = math.log10(len(corpora.keys())/dictionary[word])
-            
+
             bm25_score = inverted_doc_freq * (((k1+1)*term_frequency) / (k1*( (1-b) + b*(doc_length/avdl)) + term_frequency) )
 
             bm_25_vec[word] = bm25_score
@@ -117,14 +165,49 @@ def bm25_calculator(corpora, dictionary, avdl):
 
 def query_analyzer(dictionary, N, isEven, avdl):
     # A dictionary for query vectors
-    # topicID: query_vector  
+    # topicID: query_vector
     query_tf_idf_dicts = defaultdict(dict)
     query_bm25_dicts = defaultdict(dict)
 
     for topic in match.topic_extractor(isEven=isEven):
 
-        # tokenize query 
-        tokens = tokenize(topic["query"], puncRemoved=False)
+        # tokenize query
+        tokens_with_tag = tokenize(topic["query"].lower(), pos_tag = True)
+
+        tokens = []
+        # print(tokens_with_tag)
+        for token_with_tag in tokens_with_tag:
+            token = token_with_tag[0]
+            tag = token_with_tag[1]
+            list_token_with_tag = list(token_with_tag)
+            list_token_with_tag.append("01")
+            token_with_dot = ".".join(list_token_with_tag)
+
+            for syn in wn.synsets(token, tag):
+                syn_with_tag = syn.name()
+                if syn_with_tag.split(".")[0] == token:
+                    continue
+                w1 = wn.synset(token_with_dot)
+                w2 = wn.synset(syn_with_tag)
+                try:
+                    if w1.wup_similarity(w2) > 0.7:
+                        try:
+                            accessible_syn = syn.lemmas()[0].name()
+                            accessed_syn = dictionary[accessible_syn]
+                            tokens.append(accessible_syn)
+                        except KeyError:
+                            pass
+                except BaseException:
+                    pass
+
+            tokens.append(token)
+
+        # print(tokens)
+        '''
+        print(syns[0].name()) --> plan.n.01
+
+        print(syns[0].lemmas()[0].name())  --> plan
+        '''
 
         # create a count_dict
         count_dict = defaultdict(int)
@@ -140,19 +223,16 @@ def query_analyzer(dictionary, N, isEven, avdl):
 
         # Create a query vector with tfidf weighting
         for word, freq in count_dict.items():
-            
+
             term_frequency = freq
             inverted_doc_freq = math.log10(N/dictionary[word])
-            
-            bm25_score = inverted_doc_freq * (((k1+1)*term_frequency) / (k1*( (1-b) + b*(query_length/avdl)) + term_frequency) )
-            
+            bm25_score = inverted_doc_freq * (((k1+1)*term_frequency) / (k1*( (1-b) + b*(query_length/avdl)) + term_frequency))
+
             bm25_vec[word] = bm25_score
             tf_idf_vec[word] = term_frequency * inverted_doc_freq
 
-
         query_tf_idf_dicts[topic["topic_id"]] = tf_idf_vec
         query_bm25_dicts[topic["topic_id"]] = bm25_vec
-
 
     return query_tf_idf_dicts, query_bm25_dicts
 
@@ -166,11 +246,11 @@ def write_to_file(topic_id, sorted_relevance_dict, score_type):
 
 def cos_sim_relevance_analyzer(query_dicts, weighted_dict, score_type):
     result_data = defaultdict(dict)
-    # For each odd numbered topic 
+    # For each odd numbered topic
     # topic: odd topic ID
     for topic, q_dict in query_dicts.items():
 
-        # Scores dict to be sorted 
+        # Scores dict to be sorted
         # docID: score
         scores = dict.fromkeys(list(weighted_dict.keys()), 0)
 
@@ -182,7 +262,7 @@ def cos_sim_relevance_analyzer(query_dicts, weighted_dict, score_type):
         qvec_norm = total**0.5
 
         for docID in list(weighted_dict.keys()):
-            
+
             doc_dict = weighted_dict[docID]
 
             # Normalizing DOCUMENT to a binary vector
@@ -191,7 +271,7 @@ def cos_sim_relevance_analyzer(query_dicts, weighted_dict, score_type):
                 total += wval**2
 
             dvec_norm = total**0.5
-            
+
             # Multiply vectors
             sums = 0
             q_dict_keys = set(q_dict.keys())
@@ -216,16 +296,13 @@ def cos_sim_relevance_analyzer(query_dicts, weighted_dict, score_type):
 
 def reciprocal_ranking_fusion(tf_idf_all_scores, bm25_all_scores):    
 
-    result_data = defaultdict(dict())
+    result_data = defaultdict(dict)
 
     for topic in tf_idf_all_scores.keys():
-        rrp_scores = defaultdict(float)
+        rrf_scores = defaultdict(float)
         tf_idf_scores = tf_idf_all_scores[topic]
         bm25_scores = bm25_all_scores[topic]
         bm25_scores_keys = list(bm25_scores.keys())
-
-        # (rank ,docID)
-        # (rank ,docID)
 
         # tf_idf_scores = enumerate(tf_idf_all_scores[topic].keys(), 1)
         # bm25_scores = bm25_all_scores[topic].keys(), 1)
@@ -235,21 +312,11 @@ def reciprocal_ranking_fusion(tf_idf_all_scores, bm25_all_scores):
             tf_idf_rank = ix
             bm25_rank = bm25_scores_keys.index(docID)
 
-            rrp_scores[docID] = (1 / tf_idf_rank+1) + (1 / bm25_rank+1)
+            rrf_scores[docID] = (1 / (tf_idf_rank + 1)) + (1 / (bm25_rank + 1))
 
-        sorted_by_scores = dict(sorted(rrp_scores.items(), key=lambda item: item[1],reverse=True))
+        sorted_by_scores = dict(sorted(rrf_scores.items(), key=lambda item: item[1],reverse=True))
         result_data[topic] = sorted_by_scores
 
-        write_to_file(topic, sorted_by_scores,"rrp")
+        write_to_file(topic, sorted_by_scores,"rrf")
 
     return result_data
-
-
-
-
-
-    
-
-
-
-

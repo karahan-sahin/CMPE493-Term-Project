@@ -25,19 +25,16 @@ def execute_preprocessing():
     print("Odd-numbered-queries have been analyzed.")
     _tf_idf_relevance_analysis = cos_sim_relevance_analyzer(_query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf")
     _bm25_relevance_analysis = cos_sim_relevance_analyzer(_query_bm25_dicts, _bm25_dictionary, "bm25")
-    _rrp_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis)
+    _rrf_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis)
 
     print("TF-IDF Relevance analysis have been done with odd-numbered-queries.")
 
-    return _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrp_relevance_analysis
+    return _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis
 
 def load_continue_preprocessing(loadCorpora=True, loadDict=True):
     print("Loading sequence initiated.")
     if not loadCorpora and not loadDict:
-        _tf_idf_relevance_analysis, _bm25_relevance_analysis = execute_preprocessing()
-        # _corpora, _dictionary, _avdl = metadata_extractor()
-        # _tf_idf_dictionary = tf_idf_calculator(_corpora, _dictionary)
-        # _bm25_dictionary = bm25_calculator(_corpora, _dictionary, _avdl)
+        _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis = execute_preprocessing()
     else:
         fin_corpora = open("corpora.json", "r", encoding="utf-8")
         _corpora = json.load(fin_corpora)
@@ -60,18 +57,18 @@ def load_continue_preprocessing(loadCorpora=True, loadDict=True):
         _query_tf_idf_dicts, _query_bm25_dicts  = query_analyzer(_dictionary, len(_corpora) ,False, _avdl)
         _tf_idf_relevance_analysis = cos_sim_relevance_analyzer(_query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf")
         _bm25_relevance_analysis = cos_sim_relevance_analyzer(_query_bm25_dicts, _bm25_dictionary, "bm25")
-        _rrp_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis)
+        # _rrf_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis)
 
-    return _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrp_relevance_analysis
+    return _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis
 
 def first_K_batch(batch_size=None, reload=False):
     if not batch_size:
         return
 
     if not reload:
-        _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrp_relevance_analysis = execute_preprocessing()
+        _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis = execute_preprocessing()
     else:
-        _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrp_relevance_analysis = load_continue_preprocessing()
+        _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis = load_continue_preprocessing()
 
     print("Relevance analysis completed.")
 
