@@ -2,3 +2,5 @@ venv/
 metadata.csv
 __pycache__/
 .vscode/
+tra/
+tra_list/
