@@ -13,6 +13,7 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet as wn
 from collections import defaultdict
+from clustering import calc_cosine_similarity as ccs
 
 '''
 Planned works:
@@ -23,15 +24,14 @@ Planned works:
 
 Task Pipeline:
     Cagri - Karahan             Ozgurcan
-1 - Clustering                  Body Retriever
-2 - Clustering, cont'd
+1 -                             Body Retriever
 3 - Question - Answer
 4 - Testing
 5 - Report
 6 -                             UI
 '''
 
-trans_table = {ord(c): None for c in string.punctuation}
+trans_table = {ord(c): " " for c in string.punctuation}
 
 '''
 Retrieved from: https://towardsdatascience.com/preprocessing-text-data-using-python-576206753c28
@@ -96,27 +96,27 @@ def metadata_extractor():
             # tokenize (with lowercase)
             tokens = tokenize(content.lower())
 
-    #         # Find the unique set of words in document and
-    #         # add for inverse doc freq
-    #         unique_tokens = set(tokens)
-    #         for word in unique_tokens:
-    #             dictionary[word] += 1
+            # Find the unique set of words in document and
+            # add for inverse doc freq
+            unique_tokens = set(tokens)
+            for word in unique_tokens:
+                dictionary[word] += 1
 
-    #         # counts dictionary for the document --> word: freq
-    #         counts = defaultdict(int)
-    #         # This is for count vector
-    #         for word in tokens:
-    #             counts[word] += 1
+            # counts dictionary for the document --> word: freq
+            counts = defaultdict(int)
+            # This is for count vector
+            for word in tokens:
+                counts[word] += 1
 
-    #         doc_length = len(tokens)
-    #         sum_dl += doc_length
+            doc_length = len(tokens)
+            sum_dl += doc_length
 
-    #         # Add to corpora
-    #         corpora[cord_uid] = counts
+            # Add to corpora
+            corpora[cord_uid] = counts
     
-    # avdl = sum_dl / len(corpora)
+    avdl = sum_dl / len(corpora)
 
-    # return corpora, dictionary, avdl
+    return corpora, dictionary, avdl
 
 def dict_dump(dictionary, name):
     fout = open(f"{name}.json","w",encoding="utf-8")
@@ -125,7 +125,6 @@ def dict_dump(dictionary, name):
     fout.close()
 
 def tf_idf_calculator(corpora, dictionary):
- 
     tf_idf_dictionary = defaultdict(dict)
     for docID, count_dicts in corpora.items():
         tdf_idf_vec = defaultdict(int)
@@ -171,8 +170,8 @@ def query_analyzer(dictionary, N, isEven, avdl):
 
     for topic in match.topic_extractor(isEven=isEven):
 
-        # tokenize query
-        tokens_with_tag = tokenize((topic["query"].lower() + " " + topic["narrative"].lower()), pos_tag = True)
+        # tokenize query, ADDING NARRATIVES DRASTICALLY DROPPED THE RESULTS
+        tokens_with_tag = tokenize(topic["query"].lower(), pos_tag = True)
 
         tokens = []
         # print(tokens_with_tag)
@@ -252,7 +251,6 @@ def cos_sim_relevance_analyzer(query_dicts, weighted_dict, score_type):
     # For each odd numbered topic
     # topic: odd topic ID
     for topic, q_dict in query_dicts.items():
-
         # Scores dict to be sorted
         # docID: score
         scores = dict.fromkeys(list(weighted_dict.keys()), 0)
@@ -297,7 +295,7 @@ def cos_sim_relevance_analyzer(query_dicts, weighted_dict, score_type):
     # {topic: {docID: SCORE}}
     return result_data
 
-def reciprocal_ranking_fusion(tf_idf_all_scores, bm25_all_scores):    
+def reciprocal_ranking_fusion(tf_idf_all_scores, bm25_all_scores, score_type):    
 
     result_data = defaultdict(dict)
 
@@ -310,13 +308,71 @@ def reciprocal_ranking_fusion(tf_idf_all_scores, bm25_all_scores):
         for ix, docID in enumerate(tf_idf_scores.keys()):
 
             tf_idf_rank = ix
-            bm25_rank = bm25_scores_keys.index(docID)
+            try:
+                bm25_rank = bm25_scores_keys.index(docID)
+            except:
+                bm25_rank = len(tf_idf_scores)
 
             rrf_scores[docID] = (1 / (tf_idf_rank + 1)) + (1 / (bm25_rank + 1))
 
         sorted_by_scores = dict(sorted(rrf_scores.items(), key=lambda item: item[1],reverse=True))
         result_data[topic] = sorted_by_scores
 
-        write_to_file(topic, sorted_by_scores,"rrf")
+        write_to_file(topic, sorted_by_scores, score_type)
 
     return result_data
+
+def evaluate_with_related_clusters(_clusters, _cluster_doc_map, _query_dicts, _weighted_dictionary, score_type):
+    result_data = defaultdict(dict)
+    for topicID, query_vec in _query_dicts.items():
+        query_related_docs = list()
+        cluster_scores = dict()
+        for i in range(len(_clusters)):
+            cluster_result = ccs(_clusters[str(i)], query_vec)
+            cluster_scores[i] = cluster_result
+        cluster_scores = dict(sorted(cluster_scores.items(), key=lambda item: item[1],reverse=True))
+        preferences = list(cluster_scores.keys())
+        for cluster in preferences[:5]:
+            query_related_docs += _cluster_doc_map[str(cluster)]
+
+        scores = dict.fromkeys(query_related_docs, 0)
+
+        # Normalizing QUERY to a binary vector
+        total = 0
+        for wval in query_vec.values():
+            total += wval**2
+
+        qvec_norm = total**0.5
+
+        for docID in query_related_docs:
+
+            doc_dict = _weighted_dictionary[docID]
+
+            # Normalizing DOCUMENT to a binary vector
+            total = 0
+            for wval in doc_dict.values():
+                total += wval**2
+
+            dvec_norm = total**0.5
+
+            # Multiply vectors
+            sums = 0
+            q_dict_keys = set(query_vec.keys())
+            doc_dict_keys = set(doc_dict.keys())
+            intersected_keys = q_dict_keys.intersection(doc_dict_keys)
+
+            for intersect_key in list(intersected_keys):
+                sums += query_vec[intersect_key] * doc_dict[intersect_key]
+
+            score = sums / (qvec_norm * dvec_norm) # qvec_norm: query vector l2 norm, dvec_norm: document vector l2 norm
+
+            scores[docID] = score
+
+        # Sort dictionary by values
+        sorted_by_scores = dict(sorted(scores.items(), key=lambda item: item[1],reverse=True))
+        result_data[topicID] = sorted_by_scores
+
+        write_to_file(topicID, sorted_by_scores, score_type)
+
+    return result_data
+    
