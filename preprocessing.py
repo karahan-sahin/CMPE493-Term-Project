@@ -96,27 +96,27 @@ def metadata_extractor():
             # tokenize (with lowercase)
             tokens = tokenize(content.lower())
 
-            # Find the unique set of words in document and
-            # add for inverse doc freq
-            unique_tokens = set(tokens)
-            for word in unique_tokens:
-                dictionary[word] += 1
+    #         # Find the unique set of words in document and
+    #         # add for inverse doc freq
+    #         unique_tokens = set(tokens)
+    #         for word in unique_tokens:
+    #             dictionary[word] += 1
 
-            # counts dictionary for the document --> word: freq
-            counts = defaultdict(int)
-            # This is for count vector
-            for word in tokens:
-                counts[word] += 1
+    #         # counts dictionary for the document --> word: freq
+    #         counts = defaultdict(int)
+    #         # This is for count vector
+    #         for word in tokens:
+    #             counts[word] += 1
 
-            doc_length = len(tokens)
-            sum_dl += doc_length
+    #         doc_length = len(tokens)
+    #         sum_dl += doc_length
 
-            # Add to corpora
-            corpora[cord_uid] = counts
+    #         # Add to corpora
+    #         corpora[cord_uid] = counts
     
-    avdl = sum_dl / len(corpora)
+    # avdl = sum_dl / len(corpora)
 
-    return corpora, dictionary, avdl
+    # return corpora, dictionary, avdl
 
 def dict_dump(dictionary, name):
     fout = open(f"{name}.json","w",encoding="utf-8")
@@ -172,7 +172,7 @@ def query_analyzer(dictionary, N, isEven, avdl):
     for topic in match.topic_extractor(isEven=isEven):
 
         # tokenize query
-        tokens_with_tag = tokenize(topic["query"].lower(), pos_tag = True)
+        tokens_with_tag = tokenize((topic["query"].lower() + " " + topic["narrative"].lower()), pos_tag = True)
 
         tokens = []
         # print(tokens_with_tag)
@@ -202,7 +202,6 @@ def query_analyzer(dictionary, N, isEven, avdl):
 
             tokens.append(token)
 
-        # print(tokens)
         '''
         print(syns[0].name()) --> plan.n.01
 
@@ -212,6 +211,10 @@ def query_analyzer(dictionary, N, isEven, avdl):
         # create a count_dict
         count_dict = defaultdict(int)
         for token in tokens:
+            try:
+                isReachable = dictionary[token]
+            except KeyError:
+                continue
             count_dict[token] += 1
 
         k1 = (1.2 or 2)
@@ -303,9 +306,6 @@ def reciprocal_ranking_fusion(tf_idf_all_scores, bm25_all_scores):
         tf_idf_scores = tf_idf_all_scores[topic]
         bm25_scores = bm25_all_scores[topic]
         bm25_scores_keys = list(bm25_scores.keys())
-
-        # tf_idf_scores = enumerate(tf_idf_all_scores[topic].keys(), 1)
-        # bm25_scores = bm25_all_scores[topic].keys(), 1)
 
         for ix, docID in enumerate(tf_idf_scores.keys()):
 

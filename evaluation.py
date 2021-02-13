@@ -1,8 +1,7 @@
 import json
-import copy
 
-from numpy.core.numeric import True_
 from preprocessing import *
+from clustering import *
 
 def execute_preprocessing():
     _corpora, _dictionary, _avdl = metadata_extractor()
@@ -17,10 +16,20 @@ def execute_preprocessing():
     print("TF-IDF values calculated.")    
     dict_dump(_tf_idf_dictionary, "tf_idf")
     print("Backup TF-IDF dumped.")
+    _tf_idf_clusters, _tf_idf_cluster_doc_map = compose_clusters(_tf_idf_dictionary)
+    print("Clustering of documents based on TF-IDF values completed.")
+    _clusters_dump_obj = { "clusters": _tf_idf_clusters, "cluster_doc_map": _tf_idf_cluster_doc_map }
+    dict_dump(_clusters_dump_obj, "clusters_dump_obj_tf_idf")
+    print("Backup TF-IDF Clusters dumped.")
     _bm25_dictionary = bm25_calculator(_corpora, _dictionary, _avdl)
     print("BM25 values calculated.")
     dict_dump(_bm25_dictionary, "bm25")
     print("Backup BM25 dumped.")
+    _bm25_clusters, _bm25_cluster_doc_map = compose_clusters(_bm25_dictionary)
+    print("Clustering of documents based on BM25 values completed.")
+    _clusters_dump_obj = { "clusters": _bm25_clusters, "cluster_doc_map": _bm25_cluster_doc_map }
+    dict_dump(_clusters_dump_obj, "clusters_dump_obj_bm_25")
+    print("Backup BM25 Clusters dumped.")
     _query_tf_idf_dicts, _query_bm25_dicts  = query_analyzer(_dictionary, len(_corpora), False, _avdl)
     print("Odd-numbered-queries have been analyzed.")
     _tf_idf_relevance_analysis = cos_sim_relevance_analyzer(_query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf")
@@ -52,12 +61,20 @@ def load_continue_preprocessing(loadCorpora=True, loadDict=True):
         fin_bm25 = open("bm25.json", "r", encoding="utf-8")
         _bm25_dictionary = json.load(fin_bm25)
         fin_bm25.close()
+        fin_tf_idf = open("clusters_dump_obj_bm_25.json", "r", encoding="utf-8")
+        bm_25_cluster_dump_obj = json.load(fin_tf_idf)
+        fin_tf_idf.close()
+        _bm25_clusters = bm_25_cluster_dump_obj["clusters"]
+        _bm25_cluster_doc_map = bm_25_cluster_dump_obj["clusters_doc_map"]
+        fin_bm25 = open("bm25.json", "r", encoding="utf-8")
+        _bm25_dictionary = json.load(fin_bm25)
+        fin_bm25.close()
         print("Loading sequence completed.")
 
         _query_tf_idf_dicts, _query_bm25_dicts  = query_analyzer(_dictionary, len(_corpora) ,False, _avdl)
         _tf_idf_relevance_analysis = cos_sim_relevance_analyzer(_query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf")
         _bm25_relevance_analysis = cos_sim_relevance_analyzer(_query_bm25_dicts, _bm25_dictionary, "bm25")
-        # _rrf_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis)
+        _rrf_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis)
 
     return _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis
 
@@ -73,4 +90,5 @@ def first_K_batch(batch_size=None, reload=False):
     print("Relevance analysis completed.")
 
 if __name__ == "__main__":
-    first_K_batch(1, True)
+    metadata_extractor()
+    # first_K_batch(1, True)
