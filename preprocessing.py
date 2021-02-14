@@ -1,3 +1,4 @@
+import re
 import csv
 import sys
 import json
@@ -50,6 +51,7 @@ def get_wordnet_pos(tag):
 
 # Tokenizer and Lemmatizer
 def tokenize(text, pos_tag = False):
+    text = text.encode().decode("unicode-escape")
     text_tokens = [contractions.fix(word) for word in text.split()]
     text = ' '.join(text_tokens)
 
@@ -73,12 +75,28 @@ def tokenize(text, pos_tag = False):
 
     return tokens
 
+def read_body(abs_path):
+    text = str()
+    fin = open(f"{abs_path}.json", "r")
+    json_obj = json.load(fin)
+    body_text_list = json_obj["body_text"]
+    for body_text in body_text_list:
+        if re.match("(T|t)able\W\d+", body_text["section"]) == None:
+            text += body_text["text"]
+    text = re.sub("\W+", " ", text)
+    text = re.sub(r"\b\d+?\b", " ", text)
+    text = re.sub("http(s){0,1}:\/\/[\w\/.]+", " ", text)
+    text = text.encode().decode("unicode-escape")
+    text = re.sub("\W", " ", text)
+    return text
+
 def metadata_extractor():
     corpora = defaultdict(dict)
     dictionary = defaultdict(int)
     # open the file and extract data
     relevancy_keys = set(match.topic_relevancy_extractor().keys())
     sum_dl = 0
+    path_prefix = "../2020-07-16/document_parses/pdf_json/"
     with open('metadata.csv', encoding = "utf8", errors ='replace') as f_in:
         reader = csv.DictReader(f_in)
         for row in reader:
@@ -86,12 +104,18 @@ def metadata_extractor():
             cord_uid = row['cord_uid']
             title = row['title']
             abstract = row['abstract']
+            sha = row['sha']
 
             if cord_uid not in relevancy_keys:
                 continue
 
-            # concatenate content
-            content = title + " " + abstract
+            try:
+                body = read_body(str(path_prefix + sha))
+
+                # concatenate content
+                content = title + " " + abstract + " " + body
+            except BaseException:
+                content = title + " " + abstract
 
             # tokenize (with lowercase)
             tokens = tokenize(content.lower())
@@ -113,7 +137,8 @@ def metadata_extractor():
 
             # Add to corpora
             corpora[cord_uid] = counts
-    
+            break
+
     avdl = sum_dl / len(corpora)
 
     return corpora, dictionary, avdl
@@ -227,7 +252,10 @@ def query_analyzer(dictionary, N, isEven, avdl):
         for word, freq in count_dict.items():
 
             term_frequency = freq
-            inverted_doc_freq = math.log10(N/dictionary[word])
+            try:
+                inverted_doc_freq = math.log10(N/dictionary[word])
+            except ZeroDivisionError:
+                inverted_doc_freq = math.log10(N/(dictionary[word]+1))
             bm25_score = inverted_doc_freq * (((k1+1)*term_frequency) / (k1*( (1-b) + b*(query_length/avdl)) + term_frequency))
 
             bm25_vec[word] = bm25_score

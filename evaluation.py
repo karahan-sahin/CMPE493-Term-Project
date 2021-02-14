@@ -93,13 +93,13 @@ def load_continue_preprocessing(loadCorpora=True, loadDict=True):
 
         _query_tf_idf_dicts, _query_bm25_dicts  = query_analyzer(_dictionary, len(_corpora) ,False, _avdl)
 
-        _tf_idf_clustered_relevance_analysis = evaluate_with_related_clusters(_tf_idf_clusters, _tf_idf_cluster_doc_map, _query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf_with_clustering")
-        _bm25_clustered_relevance_analysis = evaluate_with_related_clusters(_bm25_clusters, _bm25_cluster_doc_map, _query_bm25_dicts, _bm25_dictionary, "bm25_with_clustering")
-        _rrf_clustered_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, "rrf_with_clustering")
-
         _tf_idf_relevance_analysis = cos_sim_relevance_analyzer(_query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf")
         _bm25_relevance_analysis = cos_sim_relevance_analyzer(_query_bm25_dicts, _bm25_dictionary, "bm25")
         _rrf_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis, "rrf")
+
+        _tf_idf_clustered_relevance_analysis = evaluate_with_related_clusters(_tf_idf_clusters, _tf_idf_cluster_doc_map, _query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf_with_clustering")
+        _bm25_clustered_relevance_analysis = evaluate_with_related_clusters(_bm25_clusters, _bm25_cluster_doc_map, _query_bm25_dicts, _bm25_dictionary, "bm25_with_clustering")
+        _rrf_clustered_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, "rrf_with_clustering")
 
     return _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis, _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, _rrf_clustered_relevance_analysis
 
@@ -115,4 +115,5 @@ def first_K_batch(batch_size=None, reload=False):
     print("Relevance analysis completed.")
 
 if __name__ == "__main__":
-    first_K_batch(1, True)
+    first_K_batch(1, False)
+
