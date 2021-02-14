@@ -56,7 +56,7 @@ def tokenize(text, pos_tag = False):
 
     text = re.sub("http(s){0,1}:\/\/[\w\/.]+", " ", text)
     text = re.sub(r"\b\d+?\b", " ", text)
-    text = text.encode().decode("unicode-escape")
+    text = text.encode().decode("unicode-escape", errors="ignore")
     text = re.sub(r"\W+", " ", text)
 
     # Removes stopwords and punctuation from all tokens given in text
@@ -136,13 +136,10 @@ def metadata_extractor():
 
             # Add to corpora
             corpora[cord_uid] = counts
-            break
 
-    print(dictionary)
+    avdl = sum_dl / len(corpora)
 
-    # avdl = sum_dl / len(corpora)
-
-    # return corpora, dictionary, avdl
+    return corpora, dictionary, avdl
 
 def dict_dump(dictionary, name):
     fout = open(f"{name}.json","w",encoding="utf-8")
