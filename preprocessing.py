@@ -51,9 +51,13 @@ def get_wordnet_pos(tag):
 
 # Tokenizer and Lemmatizer
 def tokenize(text, pos_tag = False):
-    text = text.encode().decode("unicode-escape")
     text_tokens = [contractions.fix(word) for word in text.split()]
     text = ' '.join(text_tokens)
+
+    text = re.sub("http(s){0,1}:\/\/[\w\/.]+", " ", text)
+    text = re.sub(r"\b\d+?\b", " ", text)
+    text = text.encode().decode("unicode-escape")
+    text = re.sub(r"\W+", " ", text)
 
     # Removes stopwords and punctuation from all tokens given in text
     tokens = [word for word in word_tokenize(text.translate(trans_table)) if word not in set(stopwords.words('english'))]
@@ -83,11 +87,6 @@ def read_body(abs_path):
     for body_text in body_text_list:
         if re.match("(T|t)able\W\d+", body_text["section"]) == None:
             text += body_text["text"]
-    text = re.sub("\W+", " ", text)
-    text = re.sub(r"\b\d+?\b", " ", text)
-    text = re.sub("http(s){0,1}:\/\/[\w\/.]+", " ", text)
-    text = text.encode().decode("unicode-escape")
-    text = re.sub("\W", " ", text)
     return text
 
 def metadata_extractor():
@@ -111,10 +110,10 @@ def metadata_extractor():
 
             try:
                 body = read_body(str(path_prefix + sha))
-
                 # concatenate content
                 content = title + " " + abstract + " " + body
             except BaseException:
+                # concatenate content
                 content = title + " " + abstract
 
             # tokenize (with lowercase)
@@ -139,9 +138,11 @@ def metadata_extractor():
             corpora[cord_uid] = counts
             break
 
-    avdl = sum_dl / len(corpora)
+    print(dictionary)
 
-    return corpora, dictionary, avdl
+    # avdl = sum_dl / len(corpora)
+
+    # return corpora, dictionary, avdl
 
 def dict_dump(dictionary, name):
     fout = open(f"{name}.json","w",encoding="utf-8")
