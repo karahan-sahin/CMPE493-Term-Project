@@ -4,6 +4,7 @@ from preprocessing import *
 from clustering import *
 
 def execute_preprocessing():
+    print("Started preprocessing...")
     _corpora, _dictionary, _avdl = metadata_extractor()
     print("Metadata extraction completed.")
     dict_dump(_corpora, "corpora")
