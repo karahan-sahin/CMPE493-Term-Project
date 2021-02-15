@@ -35,26 +35,33 @@ def execute_preprocessing():
     dict_dump(_clusters_dump_obj, "clusters_dump_obj_bm_25")
     print("Backup BM25 Clusters dumped.")
 
-    _query_tf_idf_dicts, _query_bm25_dicts  = query_analyzer(_dictionary, len(_corpora), False, _avdl)
+    _query_tf_idf_dicts, _query_bm25_dicts  = query_analyzer(_dictionary, len(_corpora), True, _avdl)
     print("Odd-numbered-queries have been analyzed.")
-    
-    _tf_idf_clustered_relevance_analysis = evaluate_with_related_clusters(_tf_idf_clusters, _tf_idf_cluster_doc_map, _query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf_with_clustering")
-    _bm25_clustered_relevance_analysis = evaluate_with_related_clusters(_bm25_clusters, _bm25_cluster_doc_map, _query_bm25_dicts, _bm25_dictionary, "bm25_with_clustering")
-    _rrf_clustered_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, "rrf_with_clustering")
 
-    
     _tf_idf_relevance_analysis = cos_sim_relevance_analyzer(_query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf")
     _bm25_relevance_analysis = cos_sim_relevance_analyzer(_query_bm25_dicts, _bm25_dictionary, "bm25")
     _rrf_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis, "rrf")
+    _combined_relevance_analysis = score_combination(_tf_idf_relevance_analysis, _bm25_relevance_analysis)
+
+    _tf_idf_clustered_relevance_analysis = evaluate_with_related_clusters(_tf_idf_clusters, _tf_idf_cluster_doc_map, _query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf_with_clustering")
+    _bm25_clustered_relevance_analysis = evaluate_with_related_clusters(_bm25_clusters, _bm25_cluster_doc_map, _query_bm25_dicts, _bm25_dictionary, "bm25_with_clustering")
+    _rrf_clustered_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, "rrf_with_clustering")
+    _combined_clustered_relevance_analysis = score_combination(_tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, "_with_clustering")
 
     print("TF-IDF Relevance analysis have been done with odd-numbered-queries.")
 
-    return _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis, _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, _rrf_clustered_relevance_analysis
+    return _tf_idf_relevance_analysis, _bm25_relevance_analysis, \
+            _rrf_relevance_analysis, _combined_relevance_analysis, \
+            _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, \
+            _rrf_clustered_relevance_analysis, _combined_clustered_relevance_analysis
 
 def load_continue_preprocessing(loadCorpora=True, loadDict=True):
     print("Loading sequence initiated.")
     if not loadCorpora and not loadDict:
-        _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis = execute_preprocessing()
+        _tf_idf_relevance_analysis, _bm25_relevance_analysis, \
+        _rrf_relevance_analysis, _combined_relevance_analysis, \
+        _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, \
+        _rrf_clustered_relevance_analysis, _combined_clustered_relevance_analysis = execute_preprocessing()
     else:
         fin_corpora = open("corpora.json", "r", encoding="utf-8")
         _corpora = json.load(fin_corpora)
@@ -91,29 +98,41 @@ def load_continue_preprocessing(loadCorpora=True, loadDict=True):
 
         print("Loading sequence completed.")
 
-        _query_tf_idf_dicts, _query_bm25_dicts  = query_analyzer(_dictionary, len(_corpora) ,False, _avdl)
+        _query_tf_idf_dicts, _query_bm25_dicts  = query_analyzer(_dictionary, len(_corpora) , True, _avdl)
 
         _tf_idf_relevance_analysis = cos_sim_relevance_analyzer(_query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf")
         _bm25_relevance_analysis = cos_sim_relevance_analyzer(_query_bm25_dicts, _bm25_dictionary, "bm25")
         _rrf_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_relevance_analysis, _bm25_relevance_analysis, "rrf")
+        _combined_relevance_analysis = score_combination(_tf_idf_relevance_analysis, _bm25_relevance_analysis)
 
         _tf_idf_clustered_relevance_analysis = evaluate_with_related_clusters(_tf_idf_clusters, _tf_idf_cluster_doc_map, _query_tf_idf_dicts, _tf_idf_dictionary, "tf_idf_with_clustering")
         _bm25_clustered_relevance_analysis = evaluate_with_related_clusters(_bm25_clusters, _bm25_cluster_doc_map, _query_bm25_dicts, _bm25_dictionary, "bm25_with_clustering")
         _rrf_clustered_relevance_analysis = reciprocal_ranking_fusion(_tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, "rrf_with_clustering")
+        _combined_clustered_relevance_analysis = score_combination(_tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, "_with_clustering")
 
-    return _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis, _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, _rrf_clustered_relevance_analysis
+    return _tf_idf_relevance_analysis, _bm25_relevance_analysis, \
+            _rrf_relevance_analysis, _combined_relevance_analysis, \
+            _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, \
+            _rrf_clustered_relevance_analysis, _combined_clustered_relevance_analysis
 
-def first_K_batch(batch_size=None, reload=False):
-    if not batch_size:
-        return
-
+def start_evaluation(reload=False):
     if not reload:
-        _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis, _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, _rrf_clustered_relevance_analysis = execute_preprocessing()
+            _tf_idf_relevance_analysis, _bm25_relevance_analysis, \
+            _rrf_relevance_analysis, _combined_relevance_analysis, \
+            _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, \
+            _rrf_clustered_relevance_analysis, _combined_clustered_relevance_analysis = execute_preprocessing()
     else:
-        _tf_idf_relevance_analysis, _bm25_relevance_analysis, _rrf_relevance_analysis, _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, _rrf_clustered_relevance_analysis = load_continue_preprocessing()
+            _tf_idf_relevance_analysis, _bm25_relevance_analysis, \
+            _rrf_relevance_analysis, _combined_relevance_analysis, \
+            _tf_idf_clustered_relevance_analysis, _bm25_clustered_relevance_analysis, \
+            _rrf_clustered_relevance_analysis, _combined_clustered_relevance_analysis = load_continue_preprocessing()
 
     print("Relevance analysis completed.")
 
 if __name__ == "__main__":
-    first_K_batch(1, False)
-
+    '''
+    -> If the preprocessing data outputs exist in your current directory,
+    (avdl.json, bm25.json, tf_idf.json, corpora.json, dictionary.json, clusters_dump_obj_bm_25.json, clusters_dump_obj_tf_idf.json),
+    you can run with the option reload=True
+    '''
+    start_evaluation(reload=False)

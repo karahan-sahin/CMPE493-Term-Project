@@ -71,6 +71,10 @@ def calc_cosine_similarity(first_doc, second_doc):
     first_norm = calculate_norm(first_doc)
     second_norm = calculate_norm(second_doc)
 
+    if first_norm == 0 or second_norm == 0:
+        score = 0
+        return score
+
     sums = 0
     first_doc_keys = set(first_doc.keys())
     second_doc_keys = set(second_doc.keys())
