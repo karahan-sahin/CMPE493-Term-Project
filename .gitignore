@@ -3,3 +3,4 @@ metadata.csv
 __pycache__/
 tra/
 tra_list/
+.vscode/
